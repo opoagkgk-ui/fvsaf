@@ -8,7 +8,7 @@ from telegram.ext import (
 import urllib.parse
 
 # ---------- НАСТРОЙКИ (замените на свои) ----------
-BOT_TOKEN = "ВАШ_ТОКЕН_ОТ_BOTFATHER"
+BOT_TOKEN = "8756393091:AAG9qTcqSeXl76_TvxtiZY4vsHzfmIiOqSM"
 PEXELS_API_KEY = "wMLd461WhqbSiDPkaHXtieu2UfuFcJXqB1CfqMb9wJTOr60VnUExeTQP"  # ваш ключ Pexels
 # -------------------------------------------------
 
