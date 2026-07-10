@@ -3,7 +3,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, ContextTypes, BusinessConnectionHandler,
-    MessageHandler, filters, CallbackQueryHandler, TypeHandler
+    MessageHandler, filters, CallbackQueryHandler
 )
 import urllib.parse
 
@@ -25,7 +25,7 @@ DOG_API = "https://api.thedogapi.com/v1/images/search"
 TIME_API = "http://worldtimeapi.org/api/timezone"
 WIKI_API = "https://ru.wikipedia.org/api/rest_v1/page/summary/"
 
-# ==================== ПЕРЕВОДЧИК (Google Translate) ====================
+# ==================== ПЕРЕВОДЧИК ====================
 def google_translate(text, source, target):
     url = "https://translate.googleapis.com/translate_a/single"
     params = {'client': 'gtx', 'sl': source, 'tl': target, 'dt': 't', 'q': text}
@@ -867,24 +867,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 async def deleted_messages_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик удалённых сообщений"""
     if not update.deleted_messages:
         return
+
     for deleted_msg in update.deleted_messages:
         chat_id = deleted_msg.chat.id
         owner_id = business_owners.get(chat_id)
         if owner_id is None:
+            print(f"⚠️ Владелец для чата {chat_id} не найден. Напишите любую команду в этом чате.")
             continue
+
         for msg_id in deleted_msg.message_ids:
             if chat_id in message_cache and msg_id in message_cache[chat_id]:
                 from_user, text = message_cache[chat_id][msg_id]
-                user_mention = f"@{from_user.username}" if from_user and from_user.username else (from_user.first_name if from_user else "Неизвестный")
-                notify_text = f"🗑 <b>{user_mention}</b> удалил сообщение:\n{text}"
-                await context.bot.send_message(owner_id, notify_text, parse_mode="HTML")
-                del message_cache[chat_id][msg_id]
+                if from_user:
+                    user_mention = f"@{from_user.username}" if from_user.username else from_user.first_name
+                else:
+                    user_mention = "Неизвестный"
 
-async def all_updates_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if hasattr(update, 'deleted_messages') and update.deleted_messages:
-        await deleted_messages_handler(update, context)
+                notify_text = f"🗑 <b>{user_mention}</b> удалил сообщение:\n{text}"
+                try:
+                    await context.bot.send_message(owner_id, notify_text, parse_mode="HTML")
+                    print(f"✅ Уведомление об удалении отправлено владельцу {owner_id}")
+                except Exception as e:
+                    print(f"❌ Ошибка отправки уведомления: {e}")
+
+                del message_cache[chat_id][msg_id]
 
 async def update_nicknames(context: ContextTypes.DEFAULT_TYPE):
     for user_id_str, settings in list(user_settings.items()):
@@ -912,8 +921,8 @@ async def update_nicknames(context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     import os
-    # Очищаем переменные SOCKS/прокси, чтобы httpx не падал
-    for var in ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "SOCKS_PROXY",
+    # Очистка прокси-переменных
+    for var in ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "SOCKS_PROXY", 
                 "https_proxy", "http_proxy", "all_proxy", "socks_proxy"]:
         os.environ.pop(var, None)
     os.environ["NO_PROXY"] = "*"
@@ -923,8 +932,13 @@ def main():
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(BusinessConnectionHandler(on_business_connection))
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
-    app.add_handler(TypeHandler(Update, all_updates_handler))
     app.add_handler(CallbackQueryHandler(handle_callback))
+    
+    # Обработчик удалённых сообщений (группа 1, чтобы не перехватывал кнопки)
+    app.add_handler(
+        MessageHandler(filters.StatusUpdate.DELETED_MESSAGES, deleted_messages_handler), 
+        group=1
+    )
 
     try:
         job_queue = app.job_queue
@@ -933,7 +947,7 @@ def main():
     except Exception as e:
         print(f"JobQueue не настроен: {e}")
 
-    print("🤖 BoBmod v3.5 (без AI) запущен!")
+    print("🤖 BoBmod v3.7 с работающим антиудалением запущен!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
